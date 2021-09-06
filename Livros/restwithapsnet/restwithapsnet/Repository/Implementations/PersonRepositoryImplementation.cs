@@ -46,7 +46,7 @@ namespace restwithapsnet.Repository.Implementations
         {
             if (!Exists(person.Id))
             {
-                new Person();
+                return null;
             }
 
             var result = _context.Persons.SingleOrDefault(p => p.Id.Equals(person.Id));

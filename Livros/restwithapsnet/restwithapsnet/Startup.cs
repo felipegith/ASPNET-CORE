@@ -9,14 +9,24 @@ using restwithapsnet.Business;
 using restwithapsnet.Business.Implementations;
 using restwithapsnet.Repository;
 using restwithapsnet.Repository.Implementations;
+using Serilog;
+using System;
+using System.Collections.Generic;
 
 namespace restwithapsnet
 {
     public class Startup
     {
-        public Startup(IConfiguration configuration)
+        public IWebHostEnvironment Environment { get; }
+        public Startup(IConfiguration configuration, IWebHostEnvironment environment)
         {
             Configuration = configuration;
+
+            Environment = environment;
+
+            Log.Logger = new LoggerConfiguration()
+                .WriteTo.Console()
+                .CreateLogger();    
         }
 
         public IConfiguration Configuration { get; }
@@ -25,11 +35,17 @@ namespace restwithapsnet
         public void ConfigureServices(IServiceCollection services)
         {
 
+           
             services.AddControllers();
 
             // Configurando string de conexão
             var connection = Configuration["MySQLConnection:MySQLConnectionString"];
             services.AddDbContext<MySqlContext>(options => options.UseMySql(connection));
+
+            if (Environment.IsDevelopment())
+            {
+                MigrateDatabase(connection);
+            }
 
             services.AddApiVersioning();
 
@@ -37,6 +53,8 @@ namespace restwithapsnet
             services.AddScoped<IPersonBusiness, PersonBusinessImplementation>();
             services.AddScoped<IPersonRepository, PersonRepositoryImplementation>();
         }
+
+       
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -56,6 +74,25 @@ namespace restwithapsnet
             {
                 endpoints.MapControllers();
             });
+        }
+
+        private void MigrateDatabase(string connection)
+        {
+            try
+            {
+                var evolveConnetion = new MySql.Data.MySqlClient.MySqlConnection(connection);
+                var evolve = new Evolve.Evolve(evolveConnetion, msg => Log.Information(msg))
+                {
+                    Locations = new List<string> { "db/migrations", "db/dataset" },
+                    IsEraseDisabled = true,
+                };
+                evolve.Migrate();
+            }
+            catch (Exception EX)
+            {
+                Log.Error("Database migration failed", EX);
+                throw;
+            }
         }
     }
 }
